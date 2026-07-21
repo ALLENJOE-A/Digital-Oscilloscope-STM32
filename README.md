@@ -323,7 +323,7 @@ images/Hardware_Setup.png
 ## Circuit Diagram
 
 ```
-images/Circuit_Diagram.png
+images/System_Architecture.png.avif
 ```
 
 ---
