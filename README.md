@@ -331,7 +331,7 @@ images/Circuit_Diagram.png
 ## Block Diagram
 
 ```
-images/Block_Diagram.png
+images/System_Architecture.png
 ```
 
 ---
