@@ -1,0 +1,36 @@
+# Arduino build artifacts
+*.elf
+*.hex
+*.bin
+*.map
+*.d
+*.o
+*.lst
+
+# IDE files
+.vscode/
+*.code-workspace
+.idea/
+
+# STM32CubeIDE
+Debug/
+Release/
+.settings/
+.cproject
+.project
+
+# Arduino IDE
+build/
+*.ino.cpp
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+venv/
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
