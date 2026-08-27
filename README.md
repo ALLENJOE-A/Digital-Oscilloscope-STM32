@@ -1,12 +1,12 @@
-# STM32 Digital Oscilloscope
+# Digital Oscilloscope — STM32
 
-> Portable Digital Storage Oscilloscope (DSO) built using the STM32F103C8T6 microcontroller featuring high-speed ADC acquisition, DMA-based sampling, software edge triggering, and real-time waveform visualization on a 2.4-inch ILI9341 TFT display.
+> Embedded waveform generation and visualization system using STM32-based button control, an Arduino R-2R DAC function generator, and a TFT-based signal acquisition display.
 
 ---
 
 ## Project Status
 
-**Status:** Completed
+**Status:** Functional Prototype (V1)
 
 **Type:** Academic Embedded Systems Project
 
@@ -16,359 +16,198 @@
 
 ---
 
-# Table of Contents
+## Overview
 
-- Overview
-- Demonstration
-- Key Features
-- System Specifications
-- Hardware Architecture
-- Software Architecture
-- Working Principle
-- Hardware Components
-- Software Stack
-- Repository Structure
-- Performance Evaluation
-- Test Results
-- Bill of Materials
-- Pin Configuration
-- Images
-- Future Improvements
-- References
-- Author
+This project implements a multi-module embedded signal generation and visualization system:
+
+1. **STM32 Master Controller** — Reads four physical buttons and transmits single-character UART commands for system control.
+2. **Waveform Generator** — Arduino-based 5-bit R-2R DAC function generator producing sine, triangle, sawtooth, and square waveforms using 32-sample lookup tables.
+3. **Display and Acquisition Module** — Arduino with MCUFRIEND TFT shield (ILI9341-compatible, 320x240) that acquires analog signals via `analogRead()` and renders real-time waveform traces.
+
+The system demonstrates fundamental concepts of DAC-based waveform synthesis, real-time analog acquisition, and embedded display rendering.
 
 ---
 
-# Overview
+## Key Features
 
-This repository presents the implementation of a portable Digital Storage Oscilloscope (DSO) using the STM32F103C8T6 ARM Cortex-M3 microcontroller.
+### Currently Implemented
 
-The project demonstrates efficient real-time signal acquisition using the internal 12-bit ADC operating with DMA-based memory transfers. Captured samples are processed using software edge triggering before being rendered on a 320×240 ILI9341 TFT display through the SPI interface.
+- 5-bit R-2R DAC waveform generation (4 waveform types)
+- 32-sample lookup tables for sine, triangle, sawtooth, and square waves
+- Non-blocking button debounce on waveform generator
+- Real-time 320-sample analog signal acquisition and display
+- TFT oscilloscope-style grid with waveform trace rendering
+- Adjustable time base (sample delay) via UP/DOWN buttons
+- HOLD mode to freeze waveform display
+- STM32 button controller with UART command transmission
+- Serial plotter output for waveform verification
 
-Unlike traditional oscilloscopes requiring dedicated acquisition hardware or FPGA implementations, this design achieves high performance using only an ARM Cortex-M microcontroller and optimized embedded firmware.
+### Planned Improvements
 
----
-
-# Demonstration
-
-> Add demonstration images or videos here.
-
-```
-images/demo.gif
-```
-
-or
-
-```
-images/demo.mp4
-```
-
----
-
-# Key Features
-
-- Real-time waveform acquisition
-- 12-bit ADC sampling
-- DMA-based data transfer
-- Circular buffer implementation
-- Software edge triggering
-- Optimized SPI display rendering
-- Analog Front-End (AFE)
-- Over-voltage protection
-- AC/DC signal conditioning
-- Portable USB-powered system
+- Timer-triggered ADC sampling for precise sample rates
+- DMA circular buffering for continuous acquisition
+- Software edge trigger detection with configurable threshold
+- Pre-trigger capture buffer
+- Voltage scaling and calibration
+- Time/division calibrated display
+- UART command reception in display module (completing STM32 integration)
+- 12-bit ADC utilization on STM32
 
 ---
 
-# System Specifications
+## System Architecture
 
-| Parameter | Value |
-|------------|-------|
-| MCU | STM32F103C8T6 |
-| CPU | ARM Cortex-M3 |
-| Clock Frequency | 72 MHz |
-| ADC Resolution | 12-bit |
-| Sampling Rate | ~857 kSa/s |
-| Display | ILI9341 TFT |
-| Resolution | 320 × 240 |
-| Communication | SPI |
-| Power | USB 5V |
-
----
-
-# Hardware Architecture
+See [docs/architecture.md](docs/architecture.md) for the full system architecture with data flow diagrams.
 
 ```
-                +-----------------------+
-                |   Input Probe         |
-                +----------+------------+
-                           |
-                           |
-                 Analog Front-End
-                           |
-          AC/DC Coupling & Protection
-                           |
-                           ▼
-                STM32F103C8T6 ADC
-                           |
-                           ▼
-                     DMA Controller
-                           |
-                           ▼
-                   Circular Buffer
-                           |
-                           ▼
-                 Trigger Detection
-                           |
-                           ▼
-                  Waveform Processing
-                           |
-                           ▼
-                      SPI Interface
-                           |
-                           ▼
-                  ILI9341 TFT Display
+  Buttons ──► STM32 Controller ──UART──► (Future: Display Module)
+                                              │
+  Button ──► Waveform Generator               │
+                  │                            │
+             5-bit Digital Output              │
+                  │                            │
+              R-2R DAC                         │
+                  │                            │
+           Analog Waveform ──────────► Signal Acquisition
+                                              │
+                                        TFT Display
 ```
 
 ---
 
-# Software Architecture
+## Hardware Components
+
+| Component | Role |
+|-----------|------|
+| STM32F103C8T6 (Blue Pill) | Master button controller, UART command source |
+| Arduino Uno/Mega | Waveform generator (R-2R DAC output) |
+| Arduino Uno/Mega + TFT Shield | Signal acquisition and display |
+| MCUFRIEND 2.4" TFT (ILI9341) | 320x240 waveform visualization |
+| R-2R Resistor Ladder | 5-bit digital-to-analog converter |
+| Push Buttons (x5) | Waveform selection and display controls |
+| Resistors | R-2R ladder network |
+
+---
+
+## Repository Structure
 
 ```
-System Initialization
-
-↓
-
-Peripheral Configuration
-
-↓
-
-ADC Initialization
-
-↓
-
-DMA Configuration
-
-↓
-
-Timer Configuration
-
-↓
-
-Continuous Sampling
-
-↓
-
-DMA Interrupt
-
-↓
-
-Trigger Detection
-
-↓
-
-Signal Scaling
-
-↓
-
-Display Rendering
-
-↓
-
-Repeat
-```
-
----
-
-# Working Principle
-
-1. Analog signal enters the Analog Front-End.
-
-2. Signal conditioning adjusts voltage level and provides protection.
-
-3. STM32 ADC samples the signal continuously.
-
-4. DMA stores samples directly into SRAM.
-
-5. Software trigger identifies stable waveform positions.
-
-6. Waveform coordinates are generated.
-
-7. TFT display is refreshed through SPI.
-
----
-
-# Hardware Components
-
-| Component | Description |
-|------------|-------------|
-| STM32F103C8T6 | ARM Cortex-M3 MCU |
-| ILI9341 TFT | 2.4" LCD Display |
-| Analog Front-End | Signal Conditioning |
-| AMS1117 | 3.3V Voltage Regulator |
-| USB Power | Power Supply |
-
----
-
-# Software Stack
-
-| Layer | Technology |
-|--------|------------|
-| Language | Embedded C |
-| IDE | Arduino IDE / STM32CubeIDE |
-| Graphics | ILI9341 Library |
-| Display Driver | SPI |
-| ADC Driver | STM32 HAL |
-| DMA | STM32 DMA |
-| Trigger Algorithm | Software Edge Trigger |
-
----
-
-# Repository Structure
-
-```
-STM32-Digital-Oscilloscope
+Digital-Oscilloscope-STM32/
+├── README.md
+├── LICENSE
+├── .gitignore
+│
+├── firmware/
+│   ├── stm32_controller/
+│   │   ├── stm32_master.ino       # STM32 button reader + UART transmitter
+│   │   └── README.md
+│   └── display_acquisition/
+│       ├── display_acquisition.ino # TFT signal acquisition and display
+│       └── README.md
+│
+├── waveform_generator/
+│   ├── waveform_generator.ino     # R-2R DAC function generator
+│   └── README.md
+│
+├── hardware/
+│   ├── pin_mapping.md             # All pin assignments from source code
+│   └── BOM.md                     # Bill of materials
 │
 ├── docs/
-│   ├── Project_Report.pdf
-│   ├── Circuit_Diagram.pdf
-│   └── Presentation.pdf
+│   ├── PROJECT_REPORT.pdf         # Original academic report
+│   ├── architecture.md            # System architecture and data flow
+│   ├── working_principle.md       # Step-by-step operation
+│   ├── performance.md             # Verified performance parameters
+│   └── limitations.md             # Current limitations and V2 roadmap
 │
-├── source/
-│   ├── main.c
-│   ├── adc.c
-│   ├── adc.h
-│   ├── display.c
-│   ├── display.h
-│   └── utils.c
-│
-├── images/
-│   ├── Hardware_Setup.png
-│   ├── Block_Diagram.png
-│   ├── Circuit_Diagram.png
-│   ├── TFT_Display.png
-│   └── Waveform.png
+├── tools/
+│   └── generate_waveforms.py      # Reproducible waveform visualization
 │
 ├── results/
-│   ├── SineWave.png
-│   ├── SquareWave.png
-│   ├── TriangleWave.png
-│   └── Performance.png
+│   └── simulated/
+│       └── README.md              # Explanation of simulated outputs
 │
-├── LICENSE
-│
-└── README.md
+└── images/
+    ├── System_Architecture.png.avif
+    ├── Waveform_Square.png.jpeg
+    └── README.md
 ```
 
 ---
 
-# Performance Evaluation
+## Build and Upload Instructions
 
-| Metric | Value |
-|----------|--------|
-| ADC Resolution | 12-bit |
-| Sampling Rate | ~857 kSa/s |
-| Display FPS | ≥15 FPS |
-| Maximum Signal Tested | 100 kHz |
-| Trigger Type | Software Edge Trigger |
+### STM32 Master Controller
 
----
+1. Install [Arduino IDE](https://www.arduino.cc/en/software) with [STM32duino board package](https://github.com/stm32duino/Arduino_Core_STM32)
+2. Select board: **Generic STM32F1 series** > **BluePill F103C8**
+3. Open `firmware/stm32_controller/stm32_master.ino`
+4. Upload via ST-Link or USB bootloader
 
-# Test Results
+### Waveform Generator
 
-| Input Signal | Status |
-|--------------|--------|
-| Sine Wave | Passed |
-| Square Wave | Passed |
-| Triangle Wave | Passed |
-| PWM Signal | Passed |
+1. Open `waveform_generator/waveform_generator.ino` in Arduino IDE
+2. Select board: **Arduino Uno** (or compatible AVR board)
+3. Connect R-2R ladder to digital pins 8-12
+4. Upload
 
----
+### Display and Acquisition
 
-# Bill of Materials (BOM)
-
-| Component | Quantity |
-|------------|----------|
-| STM32F103C8T6 | 1 |
-| ILI9341 TFT | 1 |
-| AMS1117-3.3 | 1 |
-| Capacitors | Multiple |
-| Resistors | Multiple |
-| USB Connector | 1 |
+1. Open `firmware/display_acquisition/display_acquisition.ino` in Arduino IDE
+2. Install libraries: `Adafruit_GFX`, `MCUFRIEND_kbv`
+3. Mount MCUFRIEND TFT shield on Arduino
+4. Connect analog signal to pin A5
+5. Upload
 
 ---
 
-# Pin Configuration
+## Results
 
-| STM32 Pin | Function |
-|------------|----------|
-| PA0 | ADC Input |
-| PA5 | SPI Clock |
-| PA7 | SPI MOSI |
-| PB0 | TFT DC |
-| PB1 | TFT RESET |
+The `results/simulated/` directory contains software-reconstructed waveform outputs generated directly from the firmware lookup tables using `tools/generate_waveforms.py`.
+
+These are **code-derived visualizations**, not photographs or live captures from hardware. The original prototype has been dismantled. All outputs are reproducible from the source LUT data.
 
 ---
 
-# Images
+## Limitations
 
-## Hardware Setup
+See [docs/limitations.md](docs/limitations.md) for a complete list. Key limitations include:
 
-```
-images/Hardware_Setup.png
-```
-
----
-
-## Circuit Diagram
-
-```
-images/System_Architecture.png.avif
-```
+- 5-bit DAC resolution (32 voltage levels)
+- 32-sample lookup table resolution
+- Delay-based waveform timing (not timer-interrupt driven)
+- `analogRead()`-based acquisition (not DMA)
+- No trigger detection in current firmware
+- STM32 UART commands not received by display module (integration gap)
 
 ---
 
-## Block Diagram
+## Future Improvements
 
-```
-images/System_Architecture.png
-```
-
----
-
-## Waveform Output
-
-```
-images/Waveform.png
-```
-
----
-
-# Future Improvements
-
-- FFT-based spectrum analyzer
-- Dual-channel acquisition
-- USB PC interface
-- SD card logging
-- Touchscreen GUI
-- Auto-ranging
-- Cursor measurements
-- Higher sampling rates using STM32F4/F7
-- Digital filtering
-- Trigger modes (Auto/Normal/Single)
+| Improvement | Description |
+|-------------|-------------|
+| Timer-triggered ADC | Replace `analogRead()` with timer-driven ADC for precise sampling |
+| DMA acquisition | Circular buffer with DMA for continuous, CPU-free sampling |
+| Trigger detection | Software rising/falling edge trigger with configurable threshold |
+| UART integration | Display module receives commands from STM32 controller |
+| Voltage calibration | Calibrated voltage/division display |
+| Higher resolution DAC | 8-bit or 10-bit R-2R ladder for smoother waveforms |
+| FFT spectrum view | Frequency domain analysis |
+| STM32F4 migration | Higher clock speed and ADC performance |
 
 ---
 
-# References
+## References
 
-1. STM32F103 Datasheet
-2. ARM Cortex-M3 Technical Reference Manual
-3. ILI9341 Datasheet
-4. STMicroelectronics Application Notes
+1. STM32F103C8T6 Datasheet — STMicroelectronics
+2. ILI9341 TFT Controller Datasheet
+3. R-2R Resistor Ladder DAC — Analog Devices Application Note
+4. Adafruit GFX Library Documentation
+5. MCUFRIEND_kbv Library — GitHub
 
 ---
 
-# Author
+## Author
 
 **Allen Joe A**
 
@@ -378,6 +217,6 @@ Vellore Institute of Technology, Chennai
 
 ---
 
-# License
+## License
 
-This project is intended for academic and educational purposes.
+This project is licensed under the [MIT License](LICENSE).
