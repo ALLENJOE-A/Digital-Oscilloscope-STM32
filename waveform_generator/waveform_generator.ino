@@ -1,122 +1,185 @@
-/*
- * 5-Bit R-2R Function Generator Master Code
- * Outputs on Pins 8, 9, 10, 11, and 12
- * Button on Pin 2 to toggle waveforms
+/**
+ * 5-Bit R-2R DAC Waveform Generator
+ *
+ * Hardware: Arduino Uno (AVR ATmega328P)
+ * Platform: Arduino IDE
+ *
+ * Generates analog waveforms using a 5-bit R-2R resistor ladder DAC
+ * connected to digital pins 8-12 (PORTB bits 0-4).
+ *
+ * Waveform Types (32-sample lookup tables, values 0-31):
+ *   Mode 0: Sine wave
+ *   Mode 1: Triangle wave
+ *   Mode 2: Sawtooth wave
+ *   Mode 3: Square wave
+ *
+ * Output Frequency (approximate):
+ *   f = 1 / (NUM_SAMPLES * step_period)
+ *   With DEFAULT_STEP_DELAY_US = 50 and no overhead: ~625 Hz
+ *   Actual frequency is lower due to analogRead() and Serial overhead.
+ *
+ * Button on pin D2 cycles through waveform modes with debounce.
+ * ADC on A0 provides feedback to Serial Plotter for verification.
  */
 
-// --- WAVEFORM LOOK-UP TABLES (32 steps each, max value 31) ---
+// ============================================================
+// Waveform Lookup Tables — 32 samples, 5-bit resolution (0-31)
+// ============================================================
+#define NUM_SAMPLES  32
+#define DAC_MAX      31
 
-const byte sineWave[32] = {
-  15, 18, 21, 24, 26, 28, 30, 31, 
-  31, 31, 30, 28, 26, 24, 21, 18, 
-  15, 12, 9,  7,  5,  3,  1,  0,  
-  0,  0,  1,  3,  5,  7,  9,  12
+const byte sineWave[NUM_SAMPLES] = {
+  15, 18, 21, 24, 26, 28, 30, 31,
+  31, 31, 30, 28, 26, 24, 21, 18,
+  15, 12,  9,  7,  5,  3,  1,  0,
+   0,  0,  1,  3,  5,  7,  9, 12
 };
 
-const byte triangleWave[32] = {
-  0, 2, 4, 6, 8, 10, 12, 14, 
-  16, 18, 20, 22, 24, 26, 28, 30, 
-  31, 29, 27, 25, 23, 21, 19, 17, 
-  15, 13, 11, 9, 7, 5, 3, 1
+const byte triangleWave[NUM_SAMPLES] = {
+   0,  2,  4,  6,  8, 10, 12, 14,
+  16, 18, 20, 22, 24, 26, 28, 30,
+  31, 29, 27, 25, 23, 21, 19, 17,
+  15, 13, 11,  9,  7,  5,  3,  1
 };
 
-const byte sawtoothWave[32] = {
-  0, 1, 2, 3, 4, 5, 6, 7, 
-  8, 9, 10, 11, 12, 13, 14, 15, 
-  16, 17, 18, 19, 20, 21, 22, 23, 
+const byte sawtoothWave[NUM_SAMPLES] = {
+   0,  1,  2,  3,  4,  5,  6,  7,
+   8,  9, 10, 11, 12, 13, 14, 15,
+  16, 17, 18, 19, 20, 21, 22, 23,
   24, 25, 26, 27, 28, 29, 30, 31
 };
 
-const byte squareWave[32] = {
-  31, 31, 31, 31, 31, 31, 31, 31, 
-  31, 31, 31, 31, 31, 31, 31, 31, 
-  0,  0,  0,  0,  0,  0,  0,  0,  
-  0,  0,  0,  0,  0,  0,  0,  0
+const byte squareWave[NUM_SAMPLES] = {
+  31, 31, 31, 31, 31, 31, 31, 31,
+  31, 31, 31, 31, 31, 31, 31, 31,
+   0,  0,  0,  0,  0,  0,  0,  0,
+   0,  0,  0,  0,  0,  0,  0,  0
 };
 
-// =======================================================
-// WAVEFORM STATE VARIABLES
-// =======================================================
-const byte* currentWave = sineWave; // Start with Sine Wave by default
-int waveMode = 0;                   // 0=Sine, 1=Triangle, 2=Sawtooth, 3=Square
+// ============================================================
+// Pin Definitions
+// ============================================================
+#define BUTTON_PIN            2    // Waveform select button (INPUT_PULLUP)
+#define ADC_FEEDBACK_PIN      A0   // Analog feedback for Serial Plotter
 
-// =======================================================
-// BUTTON DEBOUNCE VARIABLES
-// =======================================================
-const int BUTTON_PIN = 2;
-int buttonState;            
-int lastButtonState = HIGH; 
-unsigned long lastDebounceTime = 0;  
-unsigned long debounceDelay = 50;    
+// DAC output uses PORTB bits 0-4 (Arduino pins 8-12)
+#define DAC_PORT_MASK         0x1F // Lower 5 bits of PORTB
+#define DAC_PORT_PRESERVE     0xE0 // Upper 3 bits preserved
 
+// ============================================================
+// Timing Constants
+// ============================================================
+#define DEFAULT_STEP_DELAY_US  50  // Microseconds between DAC steps
+#define DEBOUNCE_DELAY_MS      50  // Button debounce threshold
+
+// ============================================================
+// Waveform Modes
+// ============================================================
+#define NUM_WAVEFORMS  4
+#define MODE_SINE      0
+#define MODE_TRIANGLE  1
+#define MODE_SAWTOOTH  2
+#define MODE_SQUARE    3
+
+// ============================================================
+// State Variables
+// ============================================================
+const byte* currentWave = sineWave;
+int waveMode  = MODE_SINE;
 int stepIndex = 0;
-int delayTime = 50; 
+int delayTime = DEFAULT_STEP_DELAY_US;
 
+// Button debounce state
+int buttonState     = HIGH;
+int lastButtonState = HIGH;
+unsigned long lastDebounceTime = 0;
+
+// ============================================================
+// Setup
+// ============================================================
 void setup() {
-  // Set Pins 8 through 12 as OUTPUTs
-  pinMode(8, OUTPUT);  // LSB (Pin 0 of ladder)
-  pinMode(9, OUTPUT);  // Pin 1 of ladder
-  pinMode(10, OUTPUT); // Pin 2 of ladder
-  pinMode(11, OUTPUT); // Pin 3 of ladder
-  pinMode(12, OUTPUT); // MSB (Pin 4 of ladder)
-  
-  // Set Button Pin as INPUT with internal pull-up resistor
+  // Configure DAC output pins (D8-D12)
+  for (int pin = 8; pin <= 12; pin++) {
+    pinMode(pin, OUTPUT);
+  }
+
+  // Configure button with internal pull-up
   pinMode(BUTTON_PIN, INPUT_PULLUP);
-  
-  pinMode(A0, INPUT);
+
+  // Configure ADC feedback input
+  pinMode(ADC_FEEDBACK_PIN, INPUT);
+
+  // Serial for plotter output
   Serial.begin(115200);
 }
 
+// ============================================================
+// Main Loop
+// ============================================================
 void loop() {
-  // --- 1. NON-BLOCKING BUTTON LOGIC ---
+  handleWaveformButton();
+  outputDAC();
+  serialPlotterOutput();
+}
+
+/**
+ * Non-blocking button handler with millis()-based debounce.
+ * Each press cycles to the next waveform mode.
+ */
+void handleWaveformButton() {
   int reading = digitalRead(BUTTON_PIN);
 
-  // If the switch changed, due to noise or pressing
   if (reading != lastButtonState) {
-    lastDebounceTime = millis(); // Reset the debouncing timer
+    lastDebounceTime = millis();
   }
 
-  // If the state has been stable longer than the debounce delay
-  if ((millis() - lastDebounceTime) > debounceDelay) {
-    // If the button state has officially changed
+  if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY_MS) {
     if (reading != buttonState) {
       buttonState = reading;
 
-      // Only toggle the wave if the new button state is LOW (pressed)
       if (buttonState == LOW) {
-        waveMode++;
-        if (waveMode > 3) {
-          waveMode = 0; // Wrap around back to Sine Wave
-        }
-
-        // Update the pointer to the new waveform
-        switch (waveMode) {
-          case 0: currentWave = sineWave; break;
-          case 1: currentWave = triangleWave; break;
-          case 2: currentWave = sawtoothWave; break;
-          case 3: currentWave = squareWave; break;
-        }
+        waveMode = (waveMode + 1) % NUM_WAVEFORMS;
+        updateWaveform();
       }
     }
   }
-  lastButtonState = reading; // Save the reading for the next loop
 
-  // --- 2. WAVEFORM GENERATION LOGIC ---
-  // Mask out the bottom 5 bits and inject our current wave value directly.
-  PORTB = (PORTB & 0xE0) | currentWave[stepIndex];
+  lastButtonState = reading;
+}
 
-  // Move to the next slice of the wave
+/**
+ * Update the LUT pointer based on current waveform mode.
+ */
+void updateWaveform() {
+  switch (waveMode) {
+    case MODE_SINE:     currentWave = sineWave;     break;
+    case MODE_TRIANGLE: currentWave = triangleWave; break;
+    case MODE_SAWTOOTH: currentWave = sawtoothWave; break;
+    case MODE_SQUARE:   currentWave = squareWave;   break;
+  }
+}
+
+/**
+ * Write the current LUT sample to the R-2R DAC via PORTB.
+ * Direct port manipulation for fast, simultaneous bit output.
+ * Advances stepIndex and wraps at NUM_SAMPLES.
+ */
+void outputDAC() {
+  PORTB = (PORTB & DAC_PORT_PRESERVE) | (currentWave[stepIndex] & DAC_PORT_MASK);
+
   stepIndex++;
-  
-  // Reset back to the start when we finish the 32 steps
-  if (stepIndex >= 32) {
+  if (stepIndex >= NUM_SAMPLES) {
     stepIndex = 0;
   }
 
-  // Pause briefly before the next step to set the frequency
-  delayMicroseconds(delayTime); 
-  
-  // --- 3. SERIAL PLOTTER LOGIC ---
-  int sensorValue = analogRead(A0);
+  delayMicroseconds(delayTime);
+}
+
+/**
+ * Read the DAC output via ADC and send to Serial Plotter.
+ * This adds overhead to the waveform loop, reducing actual output frequency.
+ */
+void serialPlotterOutput() {
+  int sensorValue = analogRead(ADC_FEEDBACK_PIN);
   Serial.println(sensorValue);
 }
