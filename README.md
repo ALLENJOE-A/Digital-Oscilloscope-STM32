@@ -232,6 +232,8 @@ See [docs/limitations.md](docs/limitations.md) for a complete list. Key limitati
 ## Author
 
 **Allen Joe A**
+**Naga Arjun M**
+
 
 B.Tech Electronics and VLSI Engineering
 
