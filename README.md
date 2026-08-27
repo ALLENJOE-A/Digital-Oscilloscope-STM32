@@ -167,6 +167,28 @@ The `results/simulated/` directory contains software-reconstructed waveform outp
 
 These are **code-derived visualizations**, not photographs or live captures from hardware. The original prototype has been dismantled. All outputs are reproducible from the source LUT data.
 
+### Waveform LUT Reconstructions
+
+| Sine | Triangle |
+|------|----------|
+| ![Sine LUT](results/simulated/sine_wave_lut.png) | ![Triangle LUT](results/simulated/triangle_wave_lut.png) |
+
+| Sawtooth | Square |
+|----------|--------|
+| ![Sawtooth LUT](results/simulated/sawtooth_wave_lut.png) | ![Square LUT](results/simulated/square_wave_lut.png) |
+
+### Firmware-Reconstructed TFT Display Output
+
+| Sine | Triangle |
+|------|----------|
+| ![TFT Sine](results/simulated/tft_sine.png) | ![TFT Triangle](results/simulated/tft_triangle.png) |
+
+| Sawtooth | Square |
+|----------|--------|
+| ![TFT Sawtooth](results/simulated/tft_sawtooth.png) | ![TFT Square](results/simulated/tft_square.png) |
+
+> All images above are firmware-reconstructed display outputs, not hardware photographs.
+
 ---
 
 ## Limitations
@@ -220,3 +242,7 @@ Vellore Institute of Technology, Chennai
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+---
+
+**Topics**: `stm32` `arduino` `oscilloscope` `waveform-generator` `r2r-dac` `tft-display` `embedded-systems` `signal-processing`
